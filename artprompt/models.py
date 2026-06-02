@@ -74,14 +74,13 @@ class PromptMeta(models.Model):
         verbose_name_plural = 'Дополнительная информация'
 
     def __str__(self):
-        return f'{self.style}, {self.estimated_time} мин.'
-
-    class Meta:
-        verbose_name = 'Дополнительная информация'
-        verbose_name_plural = 'Дополнительная информация'
-
-    def __str__(self):
-        return f'{self.difficulty}, {self.estimated_time} мин.'
+        if self.style and self.estimated_time:
+            return f'{self.style}, {self.estimated_time} мин.'
+        if self.style:
+            return self.style
+        if self.estimated_time:
+            return f'{self.estimated_time} мин.'
+        return 'Дополнительная информация'
 
 
 class ArtPrompt(models.Model):

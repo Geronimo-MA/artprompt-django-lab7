@@ -116,9 +116,9 @@ class AddPromptModelForm(forms.ModelForm):
         }
 
     def clean_title(self):
-        title = self.cleaned_data['title']
+        title = self.cleaned_data.get('title')
 
-        if len(title) > 50:
+        if title and len(title) > 50:
             raise ValidationError('Длина названия не должна превышать 50 символов.')
 
         validate_russian_title(title)
