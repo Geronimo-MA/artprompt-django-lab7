@@ -1,12 +1,13 @@
 import uuid
 from pathlib import Path
-
+from django.views.generic import ListView, DetailView
+from .utils import DataMixin
 from django.conf import settings
 from django.db.models import Q, F, Value, Count, Sum, Avg, Max, Min
 from django.db.models.functions import Length, Concat
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 from .forms import AddPromptPlainForm, AddPromptModelForm, UploadFileForm
 from .models import ArtPrompt, Category, TagPrompt
 
@@ -16,8 +17,191 @@ def get_base_context():
         'db_categories': Category.objects.all(),
         'tags': TagPrompt.objects.all(),
     }
+class ArtPromptHome(DataMixin, ListView):
+    model = ArtPrompt
+    template_name = 'artprompt/index.html'
+    context_object_name = 'posts'
+
+    def get_queryset(self):
+        return (
+            ArtPrompt.published
+            .select_related('cat', 'meta')
+            .prefetch_related('tags')
+        )
+
+    def get_context_data(self, *, object_list=None, **kwargs):
+        context = super().get_context_data(object_list=object_list, **kwargs)
+
+        return self.get_mixin_context(
+            context,
+            title='ArtPrompt — сайт для художников',
+            description='Главная страница проекта с арт-промптами из базы данных.',
+            cat_selected=0,
+            selected_tag=0,
+        )
 
 
+class ShowPrompt(DataMixin, DetailView):
+    model = ArtPrompt
+    template_name = 'artprompt/idea_detail.html'  # новый шаблон для отдельного поста
+    context_object_name = 'post'
+    slug_field = 'slug'
+    slug_url_kwarg = 'idea_slug'  # соответствует маршруту в urls.py
+
+    def get_queryset(self):
+            # показываем только опубликованные посты
+            return ArtPrompt.published.select_related('cat', 'meta').prefetch_related('tags')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Арт-промпт: {self.object.title}',
+            description='Подробная информация о выбранном арт-промпте'
+        )
+class CreatePrompt(DataMixin, CreateView):
+    form_class = AddPromptModelForm
+    template_name = 'artprompt/add_form.html'
+    success_url = '/'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return self.get_mixin_context(
+            context,
+            title='Добавление арт-промпта через CreateView',
+            cat_selected=None,
+            selected_tag=None,
+        )
+class UpdatePrompt(DataMixin, UpdateView):
+    model = ArtPrompt
+    form_class = AddPromptModelForm
+    template_name = 'artprompt/add_form.html'
+    slug_field = 'slug'
+    slug_url_kwarg = 'idea_slug'
+    success_url = '/'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Редактирование арт-промпта: {self.object.title}',
+            cat_selected=self.object.cat.id if self.object.cat else None,
+            selected_tag=None,
+        )
+
+
+class DeletePrompt(DataMixin, DeleteView):
+    model = ArtPrompt
+    template_name = 'artprompt/prompt_confirm_delete.html'
+    slug_field = 'slug'
+    slug_url_kwarg = 'idea_slug'
+    context_object_name = 'post'
+    success_url = '/'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Удаление арт-промпта: {self.object.title}',
+            cat_selected=self.object.cat.id if self.object.cat else None,
+            selected_tag=None,
+        )
+# Главная страница
+class ArtPromptHome(DataMixin, ListView):
+    model = ArtPrompt
+    template_name = 'artprompt/index.html'
+    context_object_name = 'posts'
+
+    def get_queryset(self):
+        return (
+            ArtPrompt.published
+            .select_related('cat', 'meta')
+            .prefetch_related('tags')
+        )
+
+    def get_context_data(self, *, object_list=None, **kwargs):
+        context = super().get_context_data(object_list=object_list, **kwargs)
+        return self.get_mixin_context(
+            context,
+            title='ArtPrompt — сайт для художников',
+            description='Главная страница проекта с арт-промптами из базы данных.',
+            cat_selected=0,
+            selected_tag=0,
+        )
+
+
+# Детальная страница арт-промпта
+class ShowPrompt(DataMixin, DetailView):
+    model = ArtPrompt
+    template_name = 'artprompt/idea_detail.html'
+    context_object_name = 'post'
+    slug_field = 'slug'
+    slug_url_kwarg = 'idea_slug'
+
+    def get_queryset(self):
+        return ArtPrompt.published.select_related('cat', 'meta').prefetch_related('tags')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Арт-промпт: {self.object.title}',
+            description='Подробная информация о выбранном арт-промпте',
+            cat_selected=self.object.cat.id if self.object.cat else None,
+            selected_tag=None,
+        )
+
+
+# Страница категории
+class ArtPromptCategory(DataMixin, ListView):
+    model = ArtPrompt
+    template_name = 'artprompt/index.html'
+    context_object_name = 'posts'
+    paginate_by = 3
+
+    def get_queryset(self):
+        self.category = Category.objects.get(slug=self.kwargs['cat_slug'])
+        return (
+            ArtPrompt.published
+            .filter(cat=self.category)
+            .select_related('cat', 'meta')
+            .prefetch_related('tags')
+        )
+
+    def get_context_data(self, *, object_list=None, **kwargs):
+        context = super().get_context_data(object_list=object_list, **kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Категория: {self.category.name}',
+            description='Арт-промпты выбранной категории.',
+            cat_selected=self.category.id
+        )
+
+
+# Страница тега
+class ArtPromptTag(DataMixin, ListView):
+    model = ArtPrompt
+    template_name = 'artprompt/index.html'
+    context_object_name = 'posts'
+    paginate_by = 3
+
+    def get_queryset(self):
+        self.tag = TagPrompt.objects.get(slug=self.kwargs['tag_slug'])
+        return (
+            self.tag.prompts
+            .filter(status=ArtPrompt.Status.PUBLISHED)
+            .select_related('cat', 'meta')
+            .prefetch_related('tags')
+        )
+
+    def get_context_data(self, *, object_list=None, **kwargs):
+        context = super().get_context_data(object_list=object_list, **kwargs)
+        return self.get_mixin_context(
+            context,
+            title=f'Тег: {self.tag.tag}',
+            description='Арт-промпты с выбранным тегом.',
+            selected_tag=self.tag.id
+        )
 def index(request):
     posts = (
         ArtPrompt.published
